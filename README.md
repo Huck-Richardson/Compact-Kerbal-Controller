@@ -52,3 +52,6 @@ Code and documentation for my custom KSP controller
 - Burn Time Remaining  
 - Current Sphere of Influence  
 - Vessel Name + Crew Count  
+
+Libraries
+Kerbal Simpit EasyButton
