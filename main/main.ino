@@ -1,5 +1,6 @@
 #include <KerbalSimpit.h>
 #include <LiquidCrystal.h>
+#include <
 
 // Digital pins
 const int sasPin = 22;
@@ -34,7 +35,7 @@ const int display2D3Pin = 41;
 const int display2RPin = 42;
 const int display2EPin = 43;
 
-LiquidCrystal lcd2(display2RegisterPin, display2EnablePin, display2D0Pin, display2D1Pin, display2D2Pin, display2D3Pin);
+LiquidCrystal lcd2(display2RPin, display2EPin, display2D0Pin, display2D1Pin, display2D2Pin, display2D3Pin);
 
 const int inputPins[] = {sasPin, stagePin, gearPin, abortPin, rcsPin, brakesPin, lightPin, customPin, switchDisplay1Pin, switchDisplay2Pin, mapPin};
 
@@ -45,20 +46,57 @@ const int joystick1YPin = 1;
 const int joystick2XPin = 2;
 const int joystick2YPin = 3;
 
+byte currentActionStatus = 0;
+const byte channels[] = {LF_STAGE_MESSAGE,
+SF_STAGE_MESSAGE,
+XENON_GAS_STAGE_MESSAGE,
+ELECTRIC_MESSAGE,
+VELOCITY_MESSAGE,
+ALTITUDE_MESSAGE,
+AIRSPEED_MESSAGE,
+APSIDESTIME_MESSAGE,
+ACTIONSTATUS_MESSAGE};
 KerbalSimpit simpit(Serial);
 
 void setup(){
     Serial.begin(115200);
 
-    for(int i=0, i<sizeof(inputPins),i++){
+    for(int i=0; i<sizeof(inputPins);i++){
         pinMode(inputPins[i],INPUT);
-        pinMode(inputPins[i],INPUT_PULLUP);
-    }
-    for(int i=0, i<sizeof(inputPins),i++){
-        pinMode(inputPins[i],OUTPUT);
         pinMode(inputPins[i],INPUT_PULLUP);
     }
 
     lcd1.begin(16,2);
-    lcd2,begin(16,2);
+    lcd2.begin(16,2);
+
+    while (!simpit.init()) {
+    delay(100);
+    }
+
+    simpit.printToKSP("Connected", PRINT_TO_SCREEN);
+    simpit.inboundHandler(messageHandler);
+    for(int i = 0;i<sizeof(channels);i++){
+        simpit.registerChannel(channels[i]);
+    }
+}
+void loop(){
+    simpit.update();
+}
+void messageHandler(byte messageType, byte msg[], byte msgSize) {
+  switch(messageType) {
+  case ACTIONSTATUS_MESSAGE:
+    // Checking if the message is the size we expect is a very basic
+    // way to confirm if the message was received properly.
+    if (msgSize == 1) {
+      currentActionStatus = msg[0];
+
+      //Let the LED_BUILIN match the current SAS state
+      if(currentActionStatus & SAS_ACTION){
+        digitalWrite(LED_BUILTIN, HIGH);
+      } else {
+        digitalWrite(LED_BUILTIN, LOW);
+      }
+    }
+    break;
+  }
 }
