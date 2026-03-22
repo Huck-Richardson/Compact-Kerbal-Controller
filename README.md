@@ -54,4 +54,4 @@ Code and documentation for my custom KSP controller
 - Vessel Name + Crew Count  
 
 Libraries
-Kerbal Simpit EasyButton
+Kerbal Simpit ezButton
