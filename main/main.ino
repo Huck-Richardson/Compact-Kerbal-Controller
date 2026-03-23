@@ -24,7 +24,6 @@ const int display1D3Pin = 35;
 const int display1RPin = 36;
 const int display1EPin = 37;
 
-int display1Screen = 1;
 LiquidCrystal lcd1(display1RPin,display1EPin,display1D0Pin,display1D1Pin,display1D2Pin,display1D3Pin);
 
 // Display 2 (D0–D3)
@@ -36,7 +35,6 @@ const int display2D3Pin = 41;
 const int display2RPin = 42;
 const int display2EPin = 43;
 
-int display2Screen = 3;
 LiquidCrystal lcd2(display2RPin, display2EPin, display2D0Pin, display2D1Pin, display2D2Pin, display2D3Pin);
 
 const int inputPins[] = {sasPin, stagePin, gearPin, abortPin, rcsPin, brakesPin, lightPin, customPin, switchDisplay1Pin, switchDisplay2Pin, mapPin};
@@ -71,12 +69,16 @@ const byte channels[] = {ACTIONSTATUS_MESSAGE,
   APSIDESTIME_MESSAGE,
 };
 
-double deltaV = 0;
-double eCharge = 0;
-double velocity = 0;
-double altitude = 0;
-double airspeed = 0;
-double apTime = 0;
+int numPages = 6;
+LiquidCrystal* lcds[] = { &lcd1, &lcd2 };
+int currentPages[] = {0,3};
+
+float deltaV = 0;
+float eCharge = 0;
+float velocity = 0;
+float altitude = 0;
+float airspeed = 0;
+float apTime = 0;
 bool inAtmosphere = true;
 
 KerbalSimpit simpit(Serial);
@@ -84,8 +86,9 @@ KerbalSimpit simpit(Serial);
 void setup(){
     Serial.begin(115200);
 
-    lcd1.begin(16,2);
-    lcd2.begin(16,2);
+    for (int i = 0; i < sizeof(lcds); i++) {
+    lcds[i]->begin(16, 2);
+  }
 
     while (!simpit.init()) {
     delay(100);
@@ -110,26 +113,33 @@ void loop(){
       simpit.toggleCAG(1);
     }
     if(buttons[8].isPressed()){
-      toggleDisplay(1);
+      currentPages[0]++;
+      if(currentPages[0] >= pages){
+        currentPages[0] = 0;
+      }
     }if(buttons[9].isPressed()){
-      toggleDisplay(2);
+      currentPages[1]++;
+      if(currentPages[1] >= pages){
+        currentPages[1] = 0;
+      }
     }
 
 }
-void toggleDisplay(int displayIdx){
-  if(displayIdx == 1 && display1Screen < sizeof(channels)-1){
-    display1Screen++;}
+void printToLcd(LiquidCrystal &lcd, const char* label, float value) {
+  lcds[index]->setCursor(0, 0);
+  lcds[index]->print(label);
+  lcds[index]->setCursor(0, 1);
+  lcds[index]->print(value);
+}
 
-  else if(displayIdx ==1){
-    display1Screen = 1;
-  }
-  else if(displayIdx == 1 && display2Screen < sizeof(channels)-1){
-    display2Screen++;
-  }
-  else if(displayIdx ==1){
-    display2Screen = 1;
+void updateDisplays(){
+  for(int i=0;i<sizeof(lcds);i++){
+    if(currentPages[i]==0){
+      printToLcd(lcds[i],"Delta-V",deltaV);
+    }
   }
 }
+
 void messageHandler(byte messageType, byte msg[], byte msgSize) {
   switch(messageType) {
   case DELTAV_MESSAGE:
