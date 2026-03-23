@@ -1,6 +1,6 @@
 #include <KerbalSimpit.h>
 #include <LiquidCrystal.h>
-#include <
+#include <ezButton.h>
 
 // Digital pins
 const int sasPin = 22;
@@ -24,6 +24,7 @@ const int display1D3Pin = 35;
 const int display1RPin = 36;
 const int display1EPin = 37;
 
+int display1Screen = 1;
 LiquidCrystal lcd1(display1RPin,display1EPin,display1D0Pin,display1D1Pin,display1D2Pin,display1D3Pin);
 
 // Display 2 (D0–D3)
@@ -35,10 +36,24 @@ const int display2D3Pin = 41;
 const int display2RPin = 42;
 const int display2EPin = 43;
 
+int display2Screen = 3;
 LiquidCrystal lcd2(display2RPin, display2EPin, display2D0Pin, display2D1Pin, display2D2Pin, display2D3Pin);
 
 const int inputPins[] = {sasPin, stagePin, gearPin, abortPin, rcsPin, brakesPin, lightPin, customPin, switchDisplay1Pin, switchDisplay2Pin, mapPin};
-
+ezButton buttons[] = {
+  ezButton(sasPin), 
+  ezButton(stagePin), 
+  ezButton(gearPin),
+  ezButton(abortPin), 
+  ezButton(rcsPin), 
+  ezButton(brakesPin),
+  ezButton(lightPin),
+  ezButton(customPin),
+  ezButton(switchDisplay1Pin),
+  ezButton(switchDisplay2Pin),
+  ezButton(mapPin)
+};
+const byte buttonActions[] = {SAS_ACTION,STAGE_ACTION,GEAR_ACTION,ABORT_ACTION,RCS_ACTION,BRAKES_ACTION,LIGHT_ACTION,};
 // Analog pins (joysticks)
 const int joystick1XPin = 0;
 const int joystick1YPin = 1;
@@ -46,25 +61,28 @@ const int joystick1YPin = 1;
 const int joystick2XPin = 2;
 const int joystick2YPin = 3;
 
-byte currentActionStatus = 0;
-const byte channels[] = {LF_STAGE_MESSAGE,
-SF_STAGE_MESSAGE,
-XENON_GAS_STAGE_MESSAGE,
-ELECTRIC_MESSAGE,
-VELOCITY_MESSAGE,
-ALTITUDE_MESSAGE,
-AIRSPEED_MESSAGE,
-APSIDESTIME_MESSAGE,
-ACTIONSTATUS_MESSAGE};
+const byte channels[] = {ACTIONSTATUS_MESSAGE,
+  ATMO_CONDITIONS_MESSAGE,
+  DELTAV_MESSAGE,
+  ELECTRIC_MESSAGE,
+  VELOCITY_MESSAGE,
+  ALTITUDE_MESSAGE,
+  AIRSPEED_MESSAGE,
+  APSIDESTIME_MESSAGE,
+};
+
+double deltaV = 0;
+double eCharge = 0;
+double velocity = 0;
+double altitude = 0;
+double airspeed = 0;
+double apTime = 0;
+bool inAtmosphere = true;
+
 KerbalSimpit simpit(Serial);
 
 void setup(){
     Serial.begin(115200);
-
-    for(int i=0; i<sizeof(inputPins);i++){
-        pinMode(inputPins[i],INPUT);
-        pinMode(inputPins[i],INPUT_PULLUP);
-    }
 
     lcd1.begin(16,2);
     lcd2.begin(16,2);
@@ -81,20 +99,85 @@ void setup(){
 }
 void loop(){
     simpit.update();
+
+  //Toggles the buttons that simpit has action groups for
+    for(int i = 0;i<sizeof(buttonActions);i++){
+      if(buttons[i].isPressed()){
+        simpit.toggleAction(buttonActions[i]);
+      }
+    }
+    if(buttons[7].isPressed()){
+      simpit.toggleCAG(1);
+    }
+    if(buttons[8].isPressed()){
+      toggleDisplay(1);
+    }if(buttons[9].isPressed()){
+      toggleDisplay(2);
+    }
+
+}
+void toggleDisplay(int displayIdx){
+  if(displayIdx == 1 && display1Screen < sizeof(channels)-1){
+    display1Screen++;}
+
+  else if(displayIdx ==1){
+    display1Screen = 1;
+  }
+  else if(displayIdx == 1 && display2Screen < sizeof(channels)-1){
+    display2Screen++;
+  }
+  else if(displayIdx ==1){
+    display2Screen = 1;
+  }
 }
 void messageHandler(byte messageType, byte msg[], byte msgSize) {
   switch(messageType) {
-  case ACTIONSTATUS_MESSAGE:
-    // Checking if the message is the size we expect is a very basic
-    // way to confirm if the message was received properly.
-    if (msgSize == 1) {
-      currentActionStatus = msg[0];
-
-      //Let the LED_BUILIN match the current SAS state
-      if(currentActionStatus & SAS_ACTION){
-        digitalWrite(LED_BUILTIN, HIGH);
-      } else {
-        digitalWrite(LED_BUILTIN, LOW);
+  case DELTAV_MESSAGE:
+    if(msgSize == sizeof(deltaVMessage)){
+      deltaVMessage myDeltaV = parseMessage<deltaVMessage>(msg);
+      deltaV = myDeltaV.stageDeltaV;
+    }
+    break;
+  case ELECTRIC_MESSAGE:
+    if(msgSize == sizeof(resourceMessage)){
+      resourceMessage myCharge = parseMessage<resourceMessage>(msg);
+      eCharge = myCharge.total;
+    }
+    break;
+  case ATMO_CONDITIONS_MESSAGE:
+    if(msgSize == sizeof(atmoConditionsMessage)){
+      atmoConditionsMessage atmo = parseMessage<atmoConditionsMessage>(msg);
+      inAtmosphere = atmo.isVesselInAtmosphere();
+    }
+  case VELOCITY_MESSAGE:
+    if(msgSize == sizeof(velocityMessage)){
+      velocityMessage myVelocity = parseMessage<velocityMessage>(msg);
+      if(inAtmosphere){
+        velocity = myVelocity.vertical;
+      }else{
+        velocity = myVelocity.orbital;
+      }
+    }
+    break;
+  case ALTITUDE_MESSAGE:
+    if(msgSize == sizeof(altitudeMessage)){
+      altitudeMessage alt = parseMessage<altitudeMessage>(msg);
+      altitude = alt.sealevel;
+    }
+    break;
+  case AIRSPEED_MESSAGE:
+    if(msgSize == sizeof(airspeedMessage)){
+      airspeedMessage air = parseMessage<airspeedMessage>(msg);
+      airspeed = air.mach;
+    }
+    break;
+  case APSIDESTIME_MESSAGE:
+    if(msgSize == sizeof(apsidesTimeMessage)){
+      apsidesTimeMessage time = parseMessage<apsidesTimeMessage>(msg);
+      if(time.apoapsis < time.periapsis || time.apoapsis == time.periapsis){
+        apTime = time.apoapsis;
+      }else{
+        apTime = time.periapsis;
       }
     }
     break;
