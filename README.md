@@ -56,5 +56,5 @@ Code and documentation for my custom KSP controller
 
 ## Diagrams
 
-![lcd diagram][diagrams/circuit(1).svg]
-![joystick diagram][diagrams/circuit(2).svg]
+![lcd diagram](diagrams/circuit(1).svg)
+![joystick diagram](diagrams/circuit(2).svg)
