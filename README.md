@@ -29,7 +29,7 @@ Code and documentation for my custom KSP controller
 | DISPLAY_2_D3        | 41  |
 | DISPLAY_2_REGISTER  | 42  |
 | DISPLAY_2_ENABLE    | 43  |
-| MAP                 | 44  |
+| JOYSTICK_MODE       | 44  |
 
 ### Analog Pins
 
@@ -44,14 +44,12 @@ Code and documentation for my custom KSP controller
 
 - Velocity  
 - Airspeed  
-- Fuel in Stage  
 - Electrical Charge in Vessel  
 - Altitude  
 - Time Until Next Apoapsis and Periapsis  
 - Delta-V Remaining  
-- Burn Time Remaining  
-- Current Sphere of Influence  
-- Vessel Name + Crew Count  
 
-Libraries
-Kerbal Simpit ezButton
+## Libraries
+- Kerbal Simpit 
+- ezButton
+- LiquidCrystal

@@ -18,6 +18,14 @@ unsigned long lastSend = 0;
 const int sendInterval = 50;
 unsigned long lastDisplay = 0;
 const int displayInterval = 200;
+const int debounceDelay = 25;
+
+struct Button {
+  int pin;
+  bool lastState;
+  bool currentState;
+  unsigned long lastDebounceTime;
+};
 
 // Display 1 (D0–D3)
 const int display1D0Pin = 32;
@@ -41,18 +49,18 @@ const int display2EPin = 43;
 
 LiquidCrystal lcd2(display2RPin, display2EPin, display2D0Pin, display2D1Pin, display2D2Pin, display2D3Pin);
 
-ezButton buttons[] = {
-  ezButton(sasPin), 
-  ezButton(stagePin), 
-  ezButton(gearPin),
-  ezButton(abortPin), 
-  ezButton(rcsPin), 
-  ezButton(brakesPin),
-  ezButton(lightPin),
-  ezButton(customPin),
-  ezButton(switchDisplay1Pin),
-  ezButton(switchDisplay2Pin),
-  ezButton(joystickModePin),
+Button buttons[] = {
+  {sasPin, HIGH, HIGH, 0},
+  {stagePin, HIGH, HIGH, 0},
+  {gearPin, HIGH, HIGH, 0},
+  {abortPin, HIGH, HIGH, 0},
+  {rcsPin, HIGH, HIGH, 0},
+  {brakesPin, HIGH, HIGH, 0},
+  {lightPin, HIGH, HIGH, 0},
+  {customPin, HIGH, HIGH, 0},
+  {switchDisplay1Pin, HIGH, HIGH, 0},
+  {switchDisplay2Pin, HIGH, HIGH, 0},
+  {joystickModePin, HIGH, HIGH, 0}
 };
 const byte buttonActions[] = {SAS_ACTION,STAGE_ACTION,GEAR_ACTION,ABORT_ACTION,RCS_ACTION,BRAKES_ACTION,LIGHT_ACTION,};
 // Analog pins (joysticks)
@@ -111,6 +119,11 @@ void setup(){
     simpit.printToKSP("Connected", PRINT_TO_SCREEN);
     simpit.inboundHandler(messageHandler);
 
+    lcd1.setCursor(0, 0);
+    lcd1.print("STARTING");
+    lcd2.setCursor(0, 0);
+    lcd2.print("STARTING");
+
       for(int i = 0;i<8;i++){
         simpit.registerChannel(channels[i]);
     }
@@ -122,42 +135,38 @@ void setup(){
     for(int i = 0;i < 4;i++){
       pinMode(joystickPins[i],INPUT);
     }
-
+    for (int i = 0; i < 11; i++) {
+    pinMode(buttons[i].pin, INPUT_PULLUP);
+    }
 }
+
+
 void loop(){
     simpit.update();
-    updateDisplays();
 
-    for(int i=0;i<11;i++){
-      buttons[i].loop();
-    }
+    updateButtons();
 
-  //Toggles the buttons that simpit has action groups for
-    for(int i = 0;i<7;i++){
-      if(buttons[i].isPressed()){
+    for(int i = 0; i < 7; i++){
+      if(isPressed(i)){
         simpit.toggleAction(buttonActions[i]);
       }
     }
-    if(buttons[7].isPressed()){
-      simpit.toggleCAG(1);
-    }
-    if(buttons[8].isPressed()){
-      currentPages[0]++;
-      if(currentPages[0] >= numPages){
-        currentPages[0] = 0;
-      }
-    }if(buttons[9].isPressed()){
-      currentPages[1]++;
-      if(currentPages[1] >= numPages){
-        currentPages[1] = 0;
-      }
-    }if(buttons[10].isPressed()){
-      if(joystickMode == 0){
-        joystickMode = 1;
-      }else{
-        joystickMode = 0;
-      }
-    }
+    
+    if(isPressed(7)){
+  simpit.toggleCAG(1);
+}
+
+if(isPressed(8)){
+  currentPages[0] = (currentPages[0] + 1) % numPages;
+}
+
+if(isPressed(9)){
+  currentPages[1] = (currentPages[1] + 1) % numPages;
+}
+
+if(isPressed(10)){
+  joystickMode = !joystickMode;
+}
   rotationMessage rot;
   int rotX = analogRead(joystick1XPin);
   int rotY = analogRead(joystick1YPin);
@@ -177,13 +186,13 @@ if (rotY < yMin)
 else if (rotY > yMax)
   rotationY = map(rotY, yMax, 1023, 0, INT16_MAX);
 
-if (joystickMode == 0) {
+if (joystickMode) {
 
   rot.setPitch(rotationY);
   rot.setYaw(rotationX);
   rot.setRoll(0);
 }
-else if (joystickMode == 1) {
+else {
 
   rot.setPitch(rotationY);
   rot.setYaw(0);
@@ -213,7 +222,7 @@ tra.setZ(0);
   throttleMsg.throttle = map(throttleReading, 0, 1023, 0, INT16_MAX);
 
 if (millis() - lastDisplay > displayInterval) {
-  updateDisplays();
+   updateDisplays();
   lastDisplay = millis();
 }
   simpit.send(THROTTLE_MESSAGE, throttleMsg);
@@ -223,13 +232,14 @@ if (millis() - lastDisplay > displayInterval) {
 void printToLcd(int idx, const char* label, float value) {
   lcds[idx]->setCursor(0, 0);
   lcds[idx]->print(label);
+  lcds[idx]->print("           ");
   lcds[idx]->setCursor(0, 1);
   lcds[idx]->print(value);
-  lcds[idx]->print("     ");
+  lcds[idx]->print("           ");
 }
 
 void updateDisplays(){
-  for(int i=0;i<sizeof(lcds);i++){
+  for(int i=0;i<2;i++){
     if(currentPages[i]==0){
       printToLcd(i,"Delta-V In Stage",deltaV);
     }else if(currentPages[i]==1){
@@ -244,6 +254,35 @@ void updateDisplays(){
       printToLcd(i,"Time Til:A/P",apTime);
     }
   }
+}
+
+void updateButtons() {
+  for (int i = 0; i < 11; i++) {
+    bool reading = digitalRead(buttons[i].pin);
+
+    if (reading != buttons[i].lastState) {
+      buttons[i].lastDebounceTime = millis();
+    }
+
+    if ((millis() - buttons[i].lastDebounceTime) > debounceDelay) {
+      buttons[i].currentState = reading;
+    }
+
+    buttons[i].lastState = reading;
+  }
+}
+
+bool isPressed(int i) {
+  static bool prevState[11] = {HIGH};
+
+  bool pressed = false;
+
+  if (prevState[i] == HIGH && buttons[i].currentState == LOW) {
+    pressed = true;
+  }
+
+  prevState[i] = buttons[i].currentState;
+  return pressed;
 }
 
 void messageHandler(byte messageType, byte msg[], byte msgSize) {

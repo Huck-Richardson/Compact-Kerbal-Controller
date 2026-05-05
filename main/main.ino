@@ -126,7 +126,6 @@ void setup(){
 }
 void loop(){
     simpit.update();
-    updateDisplays();
 
     for(int i=0;i<11;i++){
       buttons[i].loop();
